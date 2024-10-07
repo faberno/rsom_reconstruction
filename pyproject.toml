@@ -1,0 +1,31 @@
+[build-system]
+requires = ["scikit-build-core >=0.4.3", "nanobind >= 2.2.0"]
+build-backend = "scikit_build_core.build"
+
+[project]
+name = "rsom_reconstruction"
+version = "0.0.1"
+description = "GPU accelerated 3D reconstruction of raster-scan optoacoustic data."
+readme = "README.md"
+requires-python = ">=3.8"
+authors = [
+    { name = "Fabian Schneider", email = "fabianschneider2609@gmail.com" },
+]
+
+dependencies = [ "numpy",
+                 "pandas",
+                 "matplotlib"
+                ]
+
+[project.urls]
+Homepage = "https://github.com/faberno/rsom_reconstruction"
+
+[tool.scikit-build]
+# Protect the configuration against future changes in scikit-build-core
+minimum-version = "0.4"
+
+# Setuptools-style build caching in a local directory
+build-dir = "build/{wheel_tag}"
+
+# Build stable ABI wheels for CPython 3.12+
+wheel.py-api = "cp312"
