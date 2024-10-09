@@ -29,15 +29,18 @@ __global__ void sensitivity_kernel(const scalar* __restrict__ grid,
                                    scalar* __restrict__ sensitivity_field,
                                    scalar* __restrict__ signal,
                                    const scalar sos, const scalar period,
-                                   const int n_x, const int n_z, const int n_sensor, const int n_bins,
-                                   const int histDim_x, const int histDim_z, const int n_channels, const int n_signal,
-                                   const int histBlockIdx_x, const int histBlockIdx_z) {
+                                   const size_t n_x, const size_t n_z, const size_t n_sensor, const size_t n_bins,
+                                   const size_t histDim_x, const size_t histDim_z, const size_t n_channels, const size_t n_signal,
+                                   const size_t histBlockIdx_x, const size_t histBlockIdx_z) {
 
-    int hist_x =  threadIdx.x + blockDim.x * blockIdx.x;
-    int x = hist_x + histBlockIdx_x * histDim_x;
+    size_t hist_x =  threadIdx.x + blockDim.x * blockIdx.x;
+    size_t x = hist_x + histBlockIdx_x * histDim_x;
 
-    int hist_z = threadIdx.z + blockDim.z * blockIdx.z;
-    int z = hist_z + histBlockIdx_z * histDim_z;
+    size_t hist_z = threadIdx.z + blockDim.z * blockIdx.z;
+    size_t z = hist_z + histBlockIdx_z * histDim_z;
+
+    if (!(hist_x < histDim_x && hist_z < histDim_z)) // thread outside of histogram grid
+        return;
 
     if (!(x < n_x && z < n_z)) // thread outside of voxel grid
         return;
@@ -57,7 +60,7 @@ __global__ void sensitivity_kernel(const scalar* __restrict__ grid,
 
     pos_x = grid[x * n_z * 3 + 3 * z + 0];
     pos_z = grid[x * n_z * 3 + 3 * z + 2];
-    for (int p = 0; p < n_sensor; p++){
+    for (size_t p = 0; p < n_sensor; p++){
         pos_sensor_x = sensor_points[p * 3];
         pos_sensor_y = sensor_points[p * 3 + 1];
         pos_sensor_z = sensor_points[p * 3 + 2];
@@ -116,18 +119,19 @@ void calc_sensitivity(
         const nb::ndarray<scalar, nb::shape<-1, 3>, nb::device::cuda, nb::c_contig> sensor_points,
         nb::ndarray<scalar, nb::ndim<3>, nb::device::cuda, nb::c_contig> histogram,
         nb::ndarray<scalar, nb::ndim<3>, nb::device::cuda, nb::c_contig> sensitivity_field,
-        nb::ndarray<scalar, nb::ndim<2>, nb::device::cuda, nb::c_contig> signal,
+        const nb::ndarray<scalar, nb::ndim<2>, nb::device::cuda, nb::c_contig> signal,
         scalar sos,
-        scalar period){
+        scalar period,
+        const bool verbose){
 
-    const int n_x = grid.shape(0);
-    const int n_z = grid.shape(1);
-    const int n_sensor = sensor_points.shape(0);
-    const int hist_x = histogram.shape(0);
-    const int hist_z = histogram.shape(1);
-    const int n_bins = histogram.shape(2);
-    const int n_channels = signal.shape(0);
-    const int n_signal = signal.shape(1);
+    const size_t n_x = grid.shape(0);
+    const size_t n_z = grid.shape(1);
+    const size_t n_sensor = sensor_points.shape(0);
+    const size_t hist_x = histogram.shape(0);
+    const size_t hist_z = histogram.shape(1);
+    const size_t n_bins = histogram.shape(2);
+    const size_t n_channels = signal.shape(0);
+    const size_t n_signal = signal.shape(1);
 
     assert(n_channels == (sensitivity_field.shape(0)));
 
@@ -139,9 +143,21 @@ void calc_sensitivity(
                             1,
                             (n_z + hist_z - 1) / hist_z);
 
+    if (verbose){
+        std::cout << "----- Sensitivity Field Simulation ----" << std::endl;
+        std::cout << "Grid: " << n_x << "x" << n_z << std::endl;
+        std::cout << "Sensor Points: " << n_sensor << std::endl;
+        std::cout << "Histogram: " << hist_x << "x" << hist_z << "x" << n_bins << std::endl;
+        std::cout << "Sensitivity Field: " << sensitivity_field.shape(0) << "x" << sensitivity_field.shape(1) << "x" << sensitivity_field.shape(2) << std::endl;
+        std::cout << "Signal: " << n_channels << "x" << n_signal << std::endl;
+        std::cout << "Histogram Blocks: " << blocks_iter.x << "x" << blocks_iter.z << std::endl;
+        std::cout << "CUDA Blocks: " << blocks_cuda.x << "x" << blocks_cuda.z << std::endl;
+        std::cout << "---------------------------------------" << std::endl;
+    }
+
     std::chrono::steady_clock::time_point time_start = std::chrono::steady_clock::now();
-    for (int i_x = 0; i_x < blocks_iter.x; i_x++){
-        for (int i_z = 0; i_z < blocks_iter.z; i_z++){
+    for (size_t i_x = 0; i_x < blocks_iter.x; i_x++){
+        for (size_t i_z = 0; i_z < blocks_iter.z; i_z++){
             sensitivity_kernel<<<blocks_cuda, threads>>>(
                 grid.data(),
                 sensor_points.data(),
@@ -158,9 +174,10 @@ void calc_sensitivity(
             gpuErrchk( cudaDeviceSynchronize() );
         }
     }
-
     std::chrono::steady_clock::time_point time_end = std::chrono::steady_clock::now();
-    std::cout << "Finished! Kernel Time: " << (float) std::chrono::duration_cast<std::chrono::milliseconds>(time_end - time_start).count() / 1000 << "s" << std::endl;
+
+    if (verbose)
+        std::cout << "Finished! Kernel Time: " << (float) std::chrono::duration_cast<std::chrono::milliseconds>(time_end - time_start).count() / 1000 << "s" << std::endl;
 }
 
 

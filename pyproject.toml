@@ -14,7 +14,8 @@ authors = [
 
 dependencies = [ "numpy",
                  "pandas",
-                 "matplotlib"
+                 "matplotlib",
+                 "tqdm",
                 ]
 
 [project.urls]

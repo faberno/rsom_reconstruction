@@ -109,7 +109,8 @@ class SensitivityField:
 
     def simulate(self,
                  z: np.ndarray,
-                 x: Optional[np.ndarray] = None, x_spacing: float = None):
+                 x: Optional[np.ndarray] = None, x_spacing: float = None,
+                 max_vram_gb: Optional[Union[int, float]] = None, verbose=True):
         """
         Simulates the sensitivity field of a focal transducer.
 
@@ -159,13 +160,32 @@ class SensitivityField:
         max_index = np.ceil(np.max(furthest_dist) / self.period)
         hist_size = int(max_index - min_index)
 
-        histogram = cp.zeros((512, 640, hist_size), dtype=cp.float32)
-        field = cp.zeros((len(self.signal), ) + grid.shape[:-1], dtype=np.float32)
-
         grid = cp.asarray(grid, dtype=cp.float32)
         sensor_points = cp.asarray(sensor_points, dtype=cp.float32)
         signal = cp.asarray(self.signal, dtype=cp.float32)
+        field = cp.zeros((len(self.signal), ) + grid.shape[:-1], dtype=np.float32)
 
+        free_memory = cp.cuda.Device(0).mem_info[0]
+        needed_memory = (grid.shape[0] * grid.shape[1] * hist_size * 4)
+
+        # histogram = cp.zeros((480, 480, hist_size), dtype=cp.float32)
+
+        if max_vram_gb is None and free_memory > needed_memory:
+            histogram = cp.zeros((grid.shape[0], grid.shape[1], hist_size), dtype=cp.float32)
+        else:
+            if max_vram_gb is None:
+                max_vram = free_memory
+            else:
+                max_vram = min(max_vram_gb * 1000 ** 3, free_memory)
+
+            i = 0
+            while 1:
+                new_shape = (grid.shape[0] // (1 + i) + 1,  grid.shape[1] // (1 + i) + 1, hist_size)
+                needed_memory = np.prod(new_shape) * 4
+                if needed_memory < max_vram:
+                    break
+                i += 1
+            histogram = cp.zeros(new_shape, dtype=cp.float32)
 
         calc_sensitivity(
             grid,
@@ -173,19 +193,24 @@ class SensitivityField:
             histogram,
             field,
             signal,
-            self.sos, self.period
+            self.sos, self.period,
+            verbose
         )
 
         self.field = field.get()
+        self.field = np.swapaxes(self.field, 1, 2)
         self.field /= self.field.max(axis=(1, 2), keepdims=True)
+
+        del grid, sensor_points, histogram, signal, field
+        cp.get_default_memory_pool().free_all_blocks()
 
         if self.clip_method == 'cutoff':
             mask = self.field < self.cutoff
-            self.field_width = np.argmax(mask, axis=1) * x_spacing  # todo: x_spacing not defined when given x
+            self.field_width = np.argmax(mask, axis=2) * x_spacing  # todo: x_spacing not defined when given x
         elif self.clip_method == 'hyperbola':
             self.field_width = (self.hyper_a / self.hyper_b * np.sqrt(self.hyper_b * self.hyper_b + np.abs(self.z)[:, None] ** 2)).T
         else:
-            self.field_width = np.ones(self.field.shape[0]) * self.x[-1]
+            self.field_width = np.ones(self.field.shape[:2]) * self.x[-1]
 
     # @staticmethod
     # def get_sensitivity(pos, sensor_points, sos, period, signal):
