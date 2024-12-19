@@ -3,7 +3,7 @@ requires = ["scikit-build-core >=0.4.3", "nanobind >= 2.2.0"]
 build-backend = "scikit_build_core.build"
 
 [project]
-name = "rsom_reconstruction"
+name = "cupy_reconstruction"
 version = "0.0.1"
 description = "GPU accelerated 3D reconstruction of raster-scan optoacoustic data."
 readme = "README.md"
@@ -12,7 +12,8 @@ authors = [
     { name = "Fabian Schneider", email = "fabianschneider2609@gmail.com" },
 ]
 
-dependencies = [ "numpy",
+dependencies = [ "numpy < 2",
+                 "hdf5storage",
                  "pandas",
                  "matplotlib",
                  "tqdm",

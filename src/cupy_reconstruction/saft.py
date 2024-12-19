@@ -11,6 +11,7 @@ from .saft_cuda import run_saft
 from math import sqrt, copysign, floor
 import hdf5storage as h5
 
+
 def saft_munich_adapter(signal_path: str,
                         sensitivity_field: SensitivityField,
                         reconstruction_grid_bounds: Optional[tuple] = None,
@@ -18,11 +19,10 @@ def saft_munich_adapter(signal_path: str,
                         data_sign=-1,
                         sound_speed_mm_per_s: float = 1525e3,
                         focal_length_mm=2.97,
-                        detector_diameter_mm=3.0,
                         direct_term_weight=10.0,
                         t_dl=6.524590163934427e-07,
                         preprocess=True,
-                        preproces_f_bandpass=(15e6, 42e6, 120e6), verbose=True):
+                        preproces_f_bandpass=(15e6, 42e6, 120e6), return_grid=False, verbose=True):
     raw_signal_dict = h5.loadmat(signal_path)
 
     assert data_sign in [-1, 1], "data_sign must be either -1 or 1"
@@ -44,7 +44,7 @@ def saft_munich_adapter(signal_path: str,
                 sound_speed_mm_per_s=sound_speed_mm_per_s,
                 direct_term_weight=direct_term_weight,
                 preprocess=preprocess,
-                preprocess_f_bandpass=preproces_f_bandpass, verbose=verbose)
+                preprocess_f_bandpass=preproces_f_bandpass, return_grid=return_grid, verbose=verbose)
 
 
 # def run_saft_with_sensitivity_py(signal, sensor_pos, voxel_pos_x, voxel_pos_y, voxel_pos_z, sfield, sfield_x, sfield_z, sfield_width, t_0, dt,
@@ -127,6 +127,7 @@ def saft(signal: ndarray,
          preprocess=True,
          preprocess_f_bandpass=(15e6, 42e6, 120e6),
          recon_mode=4,
+         return_grid=False,
          verbose=True):
     """
     SAFT (Synthetic Aperture Focusing Technique) / Delay-and-Sum algorithm with sensitivity field weighting.
@@ -197,23 +198,23 @@ def saft(signal: ndarray,
     np.ndarray
         Reconstructed image of len(f_bandpass)-1 channels
     """
-    use_cp = True  # TODO: implement CPU version
+    gpu = True  # TODO: implement CPU version
 
-    if use_cp and not cp.cuda.is_available():
+    if gpu and not cp.cuda.is_available():
         raise ImportError("Cuda is not available!")
 
-    if use_cp and not isinstance(signal, cp.ndarray):
+    if gpu and not isinstance(signal, cp.ndarray):
         signal = cp.asarray(signal, dtype=cp.float32)  # already move signal to GPU for preprocessing
         sensor_pos = cp.asarray(sensor_pos, dtype=cp.float32)
     elif isinstance(signal, np.ndarray):
-        signal = signal.astype(np.float32) # signal should be floating type
+        signal = signal.astype(np.float32)  # signal should be floating type
         sensor_pos = sensor_pos.astype(np.float32)
 
     xp = cp.get_array_module(signal)
 
     # ensure correct shapes
     n_sensor, n_samples = signal.shape
-    assert sensor_pos.shape[0] == n_sensor, "signal and sensor_pos must have the same number of sensors"
+    assert sensor_pos.shape == (n_sensor, 2), "signal and sensor_pos must have the same number of sensors"
     assert recon_mode in [1, 2, 3, 4], "recon_mode must be either 1, 2, 3 or 4"
 
     # common RSOM preprocessing (line + bandpass filter)
@@ -233,7 +234,8 @@ def saft(signal: ndarray,
         sensor_bounds = xp.array([sensor_pos_min, sensor_pos_max]).T
         sensor_bounds = xp.vstack([sensor_bounds, [t_sp[0], t_sp[-1]]])
 
-        sensor_bound_size = (sensor_bounds[:, 1]-sensor_bounds[:, 0]) / spacing
+        # slightly increase the grid size to the next multiple of the voxel size
+        sensor_bound_size = (sensor_bounds[:, 1] - sensor_bounds[:, 0]) / spacing
         overhead = (cp.ceil(sensor_bound_size) - sensor_bound_size) / 2
         reconstruction_grid_bounds = sensor_bounds + xp.outer(overhead * spacing, xp.array([-1, 1]))
 
@@ -243,8 +245,6 @@ def saft(signal: ndarray,
 
     grid_size = ((reconstruction_grid_bounds[:, 1] - reconstruction_grid_bounds[:, 0]) / spacing).round().astype(int)
     grid_size = tuple(grid_size.tolist())
-
-    reconstruction_grid_shape = ((reconstruction_grid_bounds[:, 1] - reconstruction_grid_bounds[:, 0]) / spacing).round().astype(int)
     reconstruction_grid = [
         (reconstruction_grid_bounds[i, 0] + xp.arange(grid_size[i]) * spacing[i]).astype(signal.dtype) for i in range(3)
     ]
@@ -263,7 +263,7 @@ def saft(signal: ndarray,
             signal = signal * direct_term_weight - (signal_deriv * t_sp)
 
         del signal_deriv
-        if use_cp:
+        if gpu:
             cp.get_default_memory_pool().free_all_blocks()
 
     output = xp.zeros((len(signal),) + grid_size, dtype=signal.dtype)
@@ -274,7 +274,7 @@ def saft(signal: ndarray,
     sfield_x = sensitivity_field.x.astype(np.float32)
     sfield_z = sensitivity_field.z.astype(np.float32)
     sfield_width = sensitivity_field.field_width.astype(np.float32)
-    if use_cp:
+    if gpu:
         sfield = cp.array(sfield)
         sfield_x = cp.array(sfield_x)
         sfield_z = cp.array(sfield_z)
@@ -288,11 +288,12 @@ def saft(signal: ndarray,
         t_sp[0].item(), dt_mm,
         output,
         verbose
-        )
+    )
+    #
+    # output = output.get()
 
-    output = output.get()
-    plt.imshow(output[0].max(1))
-    plt.show()
-    plt.imshow(output[1].max(1))
-    plt.show()
+    if return_grid:
+        return output, reconstruction_grid
     return output
+
+    # return output

@@ -92,7 +92,7 @@ def bandpass_filter(signal: ndarray,
         len(f_bandpass)-1 filtered signals
     """
     inplace = out is not None
-    use_cp = isinstance(signal, cp.ndarray)
+    gpu = isinstance(signal, cp.ndarray)
     xp = cp.get_array_module(signal)
 
     if inplace:
@@ -117,7 +117,7 @@ def bandpass_filter(signal: ndarray,
         out[i] = fft.ifft(fft.ifftshift(signal_fft * filter_bp), axis=-1).real
 
     # if cupy is used, free the unused memory
-    if use_cp:
+    if gpu:
         del f, filter_bp, signal_fft
         cp.get_default_memory_pool().free_all_blocks()
         cp.fft.config.get_plan_cache().clear()
@@ -146,17 +146,17 @@ def preprocess_signal(signal, f_bandpass):
         len(f_bandpass)-1 line+bandpass filtered signals
 
     """
-    use_cp = isinstance(signal, cp.ndarray)
+    gpu = isinstance(signal, cp.ndarray)
     xp = cp.get_array_module(signal)
 
 
     out_linefiltered = xp.zeros_like(signal)
     line_filter(signal, out=out_linefiltered)
 
-    out_bandpassfiltered = xp.empty((len(f_bandpass) - 1,) + signal.shape, dtype=signal.dtype)
+    out_bandpassfiltered = xp.zeros((len(f_bandpass) - 1,) + signal.shape, dtype=signal.dtype)
     bandpass_filter(out_linefiltered, f_bandpass=f_bandpass, out=out_bandpassfiltered)
 
-    if use_cp:
+    if gpu:
         del out_linefiltered
         cp.get_default_memory_pool().free_all_blocks()
 

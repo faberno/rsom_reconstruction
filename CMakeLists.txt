@@ -2,7 +2,7 @@
 cmake_minimum_required(VERSION 3.15...3.27)
 
 # Set up the project and ensure there is a working C++ compiler
-project(rsom_reconstruction LANGUAGES CXX CUDA)
+project(cupy_reconstruction LANGUAGES CXX CUDA)
 
 # Warn if the user invokes CMake directly
 if (NOT SKBUILD)
@@ -69,5 +69,5 @@ nanobind_add_module(
 )
 
 # Install directive for scikit-build-core
-install(TARGETS saft_cuda LIBRARY DESTINATION rsom_reconstruction)
-install(TARGETS sensitivity_cuda LIBRARY DESTINATION rsom_reconstruction)
+install(TARGETS saft_cuda LIBRARY DESTINATION cupy_reconstruction)
+install(TARGETS sensitivity_cuda LIBRARY DESTINATION cupy_reconstruction)
