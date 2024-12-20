@@ -1,7 +1,7 @@
 from math import ceil
 from typing import Union, Optional
 
-from .utils import make_cart_bowl
+from .utils import cartesian_bowl
 from .sensitivity_cuda import calc_sensitivity
 
 import numpy as np
@@ -11,42 +11,38 @@ from tqdm import tqdm
 
 class SensitivityField:
     def __init__(self,
-                 sos: float = 1525e3,  # [mm/s]
-                 f_bandpass: tuple = (15e6, 42e6, 120e6),  # [Hz]
-                 td_focal_length=2.97,  # [mm]
-                 td_diameter=3.0,  # [mm]
+                 sound_speed_mm_per_s: float = 1525e3,
+                 bandpass_freq_hz: tuple = (10e6, 120e6),
+                 td_focal_length_mm=2.97,
+                 td_diameter_mm=3.0,
                  td_focal_zone_factor: float = 1.02,
-                 fs=1e9,  # [Hz]
-                 N_sensor_points=4000,
-                 clip_method: str = 'cutoff',
-                 cutoff: Optional[float] = 0.01,
+                 sampling_freq_hz=1e9,
+                 n_sensor_points=4000,
                  precomputed_field=None,
                  precomputed_x=None,
                  precomputed_z=None):
         """
-        Initialized the sensitivity field of a focal transducer.
+        Represents the sensitivity field of a focal transducer.
 
         [1] M. Schwartz. "Multispectral Optoacoustic Dermoscopy: Methods and Applications"
         (https://mediatum.ub.tum.de/1324031)
 
         Parameters
         ----------
-        sos : float
+        sound_speed_mm_per_s : float
             Assumed speeed of sound [mm/s]
-        f_bandpass: tuple[float, float]
+        bandpass_freq_hz: tuple[float, float]
             Frequency range (f0, f1) of the bandpass filter [Hz]
-        td_focal_length: float
+        td_focal_length_mm: float
             Focal length of the transducer [mm]
-        td_diameter: float
+        td_diameter_mm: float
             Diameter of the transducer [mm]
         td_focal_zone_factor: float
             Factor to determine the width of the focal zone [1, Formula 3.14]
-        fs : float
+        sampling_freq_hz : float
             Sampling frequency [Hz]
-        N_sensor_points : int
+        n_sensor_points : int
             Number of evenly spaced integration points on the transducer surface
-        cutoff: float
-            Threshold at which values of the sensitivity field are set to zero
         precomputed_field : np.ndarray
             Precomputed sensitivity field
         precomputed_x : np.ndarray
@@ -57,8 +53,9 @@ class SensitivityField:
         if precomputed_field is not None:
             self.is_precomputed = True
 
-            assert precomputed_field.shape[0] == precomputed_z.shape[0]
-            assert precomputed_field.shape[1] == precomputed_x.shape[0]
+            assert precomputed_x is not None and precomputed_z is not None, "x and z must be provided when precomputed_field is given"
+            assert precomputed_field.shape[0] == precomputed_z.shape[0], f"z-vector must be of shape {precomputed_field.shape[0]}, but is {precomputed_z.shape[0]}"
+            assert precomputed_field.shape[1] == precomputed_x.shape[0], f"x-vector must be of shape {precomputed_field.shape[1]}, but is {precomputed_z.shape[0]}"
 
             self.field = precomputed_field
             self.x = precomputed_x
@@ -67,36 +64,46 @@ class SensitivityField:
         else:
             self.is_precomputed = False
 
-            self.sos = sos
-            self.f_bandpass = f_bandpass
-            self.td_focal_length = td_focal_length
-            self.td_diameter = td_diameter
+            self.sound_speed_mm_per_s = sound_speed_mm_per_s
+            self.bandpass_freq_hz = bandpass_freq_hz
+            self.td_focal_length_mm = td_focal_length_mm
+            self.td_diameter_mm = td_diameter_mm
             self.td_focal_zone_factor = td_focal_zone_factor
-            self.fs = fs
-            self.N_sensor_points = N_sensor_points
-            self.clip_method = clip_method
-            self.cutoff = cutoff
+            self.sampling_freq_hz = sampling_freq_hz
+            self.n_sensor_points = n_sensor_points
 
-            self.bands = np.array([(f_bandpass[i], f_bandpass[i+1]) for i in range(len(f_bandpass) - 1)])
+            self.frequency_bands = np.array(
+                [(bandpass_freq_hz[i], bandpass_freq_hz[i+1]) for i in range(len(bandpass_freq_hz) - 1)]
+            )
 
-            # sensitivity field hyperbola
-            td_focal_zone_width = td_focal_zone_factor * sos * td_focal_length / (self.bands.mean(axis=1) * td_diameter)  # [mm]
+            # hyperbolic focal zone
+            # [1, Formula 3.13+3.14]
+            td_focal_zone_width = td_focal_zone_factor * sound_speed_mm_per_s * td_focal_length_mm / (self.frequency_bands.mean(axis=1) * td_diameter_mm)  # [mm]
             self.hyper_a = td_focal_zone_width / 2
-            self.hyper_b = (2 * td_focal_length / td_diameter) * self.hyper_a
+            self.hyper_b = (2 * td_focal_length_mm / td_diameter_mm) * self.hyper_a
 
-            # model absorber signal [1, Section: Sensitivity field simulation (p. 38+)]
-            r_absorber = 0.8 * sos / self.bands.sum(axis=1)
+            # model absorber signal
+            # [1, Section: Sensitivity field simulation (p. 38+)]
+            r_absorber = 0.8 * sound_speed_mm_per_s / self.frequency_bands.sum(axis=1)
 
-            # create time vector
-            self.period = 1 / (2 * fs)
-            spacing = sos * self.period
-            signal_length = np.ceil(r_absorber / spacing).astype(int) + 1
-            max_length = signal_length.max()
+            self.period = 1 / (2 * sampling_freq_hz)
+            dt = sound_speed_mm_per_s * self.period  # time spacing
+            signal_lengths = np.ceil(r_absorber / dt).astype(int) + 1
 
-            self.signal = [np.arange(length) * self.period * sos for length in signal_length]  # we compute N-shaped signal without the unnecesary zeros at the end
-            self.signal = [np.hstack((signal, np.zeros(max_length - len(signal)))) for signal in self.signal]  # pad the smaller signal to get same lengths
-            self.signal = np.array(self.signal)
-            self.signal = np.hstack((-np.fliplr(self.signal[:, 1:]), self.signal))  # add the mirrored negative part for N-Shape
+            # different frequency bands have different signal lengths, we chose the longest one to be able to
+            # put them into one array
+            max_length = signal_lengths.max()
+
+            # we compute N-shaped signal without the unnecesary zeros at the end
+            signal = [np.arange(length) * self.period * sound_speed_mm_per_s for length in signal_lengths]
+            # pad all signals to the same length
+            signal = np.array(
+                [np.pad(sig, (0, max_length - len(sig))) for sig in signal]
+            )
+            # add the mirrored negative part to create the N-Shape
+            self.signal = np.hstack(
+                (-np.fliplr(signal[:, 1:]), signal)
+            )
 
     @staticmethod
     def from_precomputed(field, x, z):
@@ -144,18 +151,17 @@ class SensitivityField:
         grid = np.stack(np.meshgrid(
             self.x,
             0,
-            self.z + self.td_focal_length,
+            self.z + self.td_focal_length_mm,
             indexing='ij'
         ), axis=-1).squeeze()
 
-        sensor_points = make_cart_bowl(
-            np.array([0, 0, 0]),
-            self.td_focal_length,
-            self.td_diameter,
-            np.array([0, 0, 1]),
-            self.N_sensor_points).T
+        sensor_points = cartesian_bowl(
+            self.td_focal_length_mm,
+            self.td_diameter_mm,
+            self.n_sensor_points
+        )
 
-        furthest_dist = np.linalg.norm(grid[-1, 0, None] - sensor_points, axis=-1) / self.sos
+        furthest_dist = np.linalg.norm(grid[-1, 0, None] - sensor_points, axis=-1) / self.sound_speed_mm_per_s
         min_index = np.floor(np.min(furthest_dist) / self.period)
         max_index = np.ceil(np.max(furthest_dist) / self.period)
         hist_size = int(max_index - min_index)
@@ -193,7 +199,7 @@ class SensitivityField:
             histogram,
             field,
             signal,
-            self.sos, self.period,
+            self.sound_speed_mm_per_s, self.period,
             verbose
         )
 
@@ -204,10 +210,4 @@ class SensitivityField:
         del grid, sensor_points, histogram, signal, field
         cp.get_default_memory_pool().free_all_blocks()
 
-        if self.clip_method == 'cutoff':
-            mask = self.field < self.cutoff
-            self.field_width = np.argmax(mask, axis=2) * x_spacing  # todo: x_spacing not defined when given x
-        elif self.clip_method == 'hyperbola':
-            self.field_width = (self.hyper_a / self.hyper_b * np.sqrt(self.hyper_b * self.hyper_b + np.abs(self.z)[:, None] ** 2)).T
-        else:
-            self.field_width = np.ones(self.field.shape[:2]) * self.x[-1]
+        self.field_width = (self.hyper_a / self.hyper_b * np.sqrt(self.hyper_b * self.hyper_b + np.abs(self.z)[:, None] ** 2)).T
