@@ -20,14 +20,13 @@ def saft_munich_adapter(signal_path: str,
                         data_sign=-1,
                         sound_speed_mm_per_s: float = 1525e3,
                         td_focal_length_mm=2.97,
+                        recon_mode=4,
                         direct_term_weight=10.0,
-                        delay_line_time_s=199/3.05e8,
+                        delay_line_time_s=199 / 3.05e8,
                         preprocess=True,
                         preprocess_bandpass_freq_hz=(15e6, 42e6, 120e6),
-                        recon_mode=4,
                         return_reconstruction_grid=False,
                         verbose=True):
-
     """ Wrapper around the SAFT algorithm for the .mat file format. """
     raw_signal_dict = h5.loadmat(signal_path)
 
@@ -48,12 +47,13 @@ def saft_munich_adapter(signal_path: str,
                 trigger_delay=trigger_delay,
                 delay_line_time_s=delay_line_time_s,
                 sound_speed_mm_per_s=sound_speed_mm_per_s,
+                recon_mode=recon_mode,
                 direct_term_weight=direct_term_weight,
                 preprocess=preprocess,
                 preprocess_bandpass_freq_hz=preprocess_bandpass_freq_hz,
-                recon_mode=recon_mode,
                 return_reconstruction_grid=return_reconstruction_grid,
                 verbose=verbose)
+
 
 def saft(signal: ndarray,
          sensor_positions: ndarray,
@@ -63,12 +63,12 @@ def saft(signal: ndarray,
          sampling_freq_hz: float = 1e9,
          td_focal_length_mm: float = 2.97,
          trigger_delay: float = 2080.0,
-         delay_line_time_s: float = 199/3.05e8,
+         delay_line_time_s: float = 199 / 3.05e8,
          sound_speed_mm_per_s: float = 1525e3,
+         recon_mode=4,
          direct_term_weight=10.0,
          preprocess=True,
          preprocess_bandpass_freq_hz=(15e6, 42e6, 120e6),
-         recon_mode=4,
          return_reconstruction_grid=False,
          verbose=True):
     """
@@ -165,10 +165,12 @@ def saft(signal: ndarray,
         shape = ((reconstruction_grid_bounds_mm[:, 1] - reconstruction_grid_bounds_mm[:, 0]) / spacing)
         assert xp.all(xp.isclose(shape - shape.round(), 0))
 
-    grid_size = ((reconstruction_grid_bounds_mm[:, 1] - reconstruction_grid_bounds_mm[:, 0]) / spacing).round().astype(int)
+    grid_size = ((reconstruction_grid_bounds_mm[:, 1] - reconstruction_grid_bounds_mm[:, 0]) / spacing).round().astype(
+        int)
     grid_size = tuple(grid_size.tolist())
     reconstruction_grid = [
-        (reconstruction_grid_bounds_mm[i, 0] + xp.arange(grid_size[i]) * spacing[i]).astype(signal.dtype) for i in range(3)
+        (reconstruction_grid_bounds_mm[i, 0] + xp.arange(grid_size[i]) * spacing[i]).astype(signal.dtype) for i in
+        range(3)
     ]
 
     # different reconstruction modes
@@ -188,10 +190,9 @@ def saft(signal: ndarray,
         cp.get_default_memory_pool().free_all_blocks()
         cp.fft.config.get_plan_cache().clear()
 
-
     sensitivity_field.simulate(reconstruction_grid[2].get(), x_spacing=0.001, verbose=verbose)
     sfield = cp.array(sensitivity_field.field.astype(np.float32))
-    sfield_x =cp.array( sensitivity_field.x.astype(np.float32))
+    sfield_x = cp.array(sensitivity_field.x.astype(np.float32))
     sfield_z = cp.array(sensitivity_field.z.astype(np.float32))
     sfield_width = cp.array(sensitivity_field.field_width.astype(np.float32))
 

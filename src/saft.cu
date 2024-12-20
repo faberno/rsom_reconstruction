@@ -31,7 +31,7 @@ __global__ void saft_kernel(
     const scalar* __restrict__ sensitivity_z,
     const scalar* __restrict__ sensitivity_width,
     scalar* __restrict__ recon,
-    const int n_x, const int n_y, const int n_z, const int n_x_sens,
+    const int n_x, const int n_y, const int n_z, const int n_channels_sens, const int n_x_sens,
     const int n_sensor, const int n_samples, const int n_channels,
     const scalar t_0, const scalar dt) {
 
@@ -46,7 +46,7 @@ __global__ void saft_kernel(
     int vox_index = z + n_z * y + n_z * n_y * x;
 
     scalar dx, dy, dz, hyper_a, hyper_b, delay, delay_floor, r_sq, r, r_floor;
-    int delay_int, r_int;
+    int delay_int, r_int, c_sens;
     scalar lower_value, upper_value, value, lower_sensitivity_value, upper_sensitivity_value, sensitivity_value;
 
     scalar position_x = voxel_pos_x[x];
@@ -69,7 +69,8 @@ __global__ void saft_kernel(
         delay_calculated = false;
 
         for (int c = 0; c < n_channels; c++){
-            sfield_width = sensitivity_width[c * n_z + z];
+            c_sens = min(c, n_channels_sens - 1);
+            sfield_width = sensitivity_width[c_sens * n_z + z];
             if (r_sq > (sfield_width * sfield_width)){
                 continue;
             }
@@ -89,8 +90,8 @@ __global__ void saft_kernel(
                 r_int = (int) r;
             }
 
-            lower_sensitivity_value = sensitivity[(c * n_x_sens * n_z) + (z * n_x_sens) + (r_int)];
-            upper_sensitivity_value = sensitivity[(c * n_x_sens * n_z) + (z * n_x_sens) + (r_int + 1)];
+            lower_sensitivity_value = sensitivity[(c_sens * n_x_sens * n_z) + (z * n_x_sens) + (r_int)];
+            upper_sensitivity_value = sensitivity[(c_sens * n_x_sens * n_z) + (z * n_x_sens) + (r_int + 1)];
             sensitivity_value = lower_sensitivity_value * (r_floor + 1 - r) + upper_sensitivity_value * (r - r_floor);
 
             lower_value = signal[(c * n_samples * n_sensor) + (s * n_samples) + (delay_int)];
@@ -130,14 +131,15 @@ void run_saft(
     const int n_x = voxel_pos_x.shape(0);
     const int n_y = voxel_pos_y.shape(0);
     const int n_z = voxel_pos_z.shape(0);
-    const int n_x_sens = sensitivity.shape(2);
-    const int n_sensor = sensor_pos.shape(0);
-    const int n_samples = signal.shape(2);
     const int n_channels = signal.shape(0);
+    const int n_sensor = signal.shape(1);
+    const int n_samples = signal.shape(2);
+    const int n_channels_sens = sensitivity.shape(0);
+    const int n_x_sens = sensitivity.shape(2);
 
-    assert(n_sensor == (signal.shape(0)));
+    assert(n_sensor == (sensor_pos.shape(0)));
     assert(n_z == (sensitivity.shape(0)));
-    assert(n_channels == sensitivity.shape(0));
+    assert((n_channels == sensitivity.shape(0)));
     assert(((int) sensitivity.shape(1)) == (sensitivity_z.shape(0)));
     assert(((int) sensitivity.shape(2)) == (sensitivity_x.shape(0)));
     assert(((int) sensitivity.shape(1)) == (sensitivity_width.shape(1)));
@@ -151,7 +153,7 @@ void run_saft(
         std::cout << "--------- RSOM Recontruction ----------" << std::endl;
         std::cout << "Signal: " << n_sensor << "x" << n_samples << std::endl;
         std::cout << "Volume: " << n_channels << "x" << n_x << "x" << n_y << "x"<< n_z << std::endl;
-        std::cout << "Sensitivity Field: " << n_channels << sensitivity.shape(1) << "x" << n_x_sens << std::endl;
+        std::cout << "Sensitivity Field: " << n_channels_sens << sensitivity.shape(1) << "x" << n_x_sens << std::endl;
         std::cout << "Blocks: " << blocks.x << ", " << blocks.y << ", "<< blocks.z << std::endl;
         std::cout << "---------------------------------------" << std::endl;
     }
@@ -168,7 +170,7 @@ void run_saft(
         sensitivity_z.data(),
         sensitivity_width.data(),
         recon.data(),
-        n_x, n_y, n_z, n_x_sens, n_sensor, n_samples, n_channels,
+        n_x, n_y, n_z, n_channels_sens, n_x_sens, n_sensor, n_samples, n_channels,
         t_0, dt);
 
     gpuErrchk( cudaPeekAtLastError() );

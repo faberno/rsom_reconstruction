@@ -14,7 +14,7 @@ def cartesian_bowl(focal_length_mm: float,
                    n_points: int) -> np.ndarray:
     """Create evenly spaced points on a spherical bowl.
 
-    Code simplification of
+    Simplified code of https://github.com/waltsims/k-wave-python/blob/master/kwave/utils/mapgen.py: make_cart_bowl
     """
     GOLDEN_ANGLE = pi * (3 - sqrt(5.))  # golden angle in radians
 

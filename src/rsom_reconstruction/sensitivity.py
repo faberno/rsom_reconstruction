@@ -12,7 +12,7 @@ from tqdm import tqdm
 class SensitivityField:
     def __init__(self,
                  sound_speed_mm_per_s: float = 1525e3,
-                 bandpass_freq_hz: tuple = (10e6, 120e6),
+                 bandpass_freq_hz: tuple = (10e6, 90e6),
                  td_focal_length_mm=2.97,
                  td_diameter_mm=3.0,
                  td_focal_zone_factor: float = 1.02,
@@ -161,6 +161,10 @@ class SensitivityField:
             self.n_sensor_points
         )
 
+        # to calculate the sensitivity field, for each voxel we have to calculate a histogram of the distances to each sensor point
+        # to vectorize this calculation, we find the longest histogram and create every histogram with the same length
+        # the voxel in the upper right corner should always be the one with largest difference between the closest and furthest sensor point
+        # so we use it to calculate the maximum histogram length
         furthest_dist = np.linalg.norm(grid[-1, 0, None] - sensor_points, axis=-1) / self.sound_speed_mm_per_s
         min_index = np.floor(np.min(furthest_dist) / self.period)
         max_index = np.ceil(np.max(furthest_dist) / self.period)
@@ -171,10 +175,13 @@ class SensitivityField:
         signal = cp.asarray(self.signal, dtype=cp.float32)
         field = cp.zeros((len(self.signal), ) + grid.shape[:-1], dtype=np.float32)
 
+
+        # calculating a histogram does not benefit much from many threads, because the threads can not write to the
+        # same bin at the same time. So instead we deploy one thread per voxel histogram. This requires a lot of memory,
+        # so we can only do it in the global memory of the GPU. If we don't have enough memory for the whole histogra,
+        # we have to split it up into patches which each require a kernel call
         free_memory = cp.cuda.Device(0).mem_info[0]
         needed_memory = (grid.shape[0] * grid.shape[1] * hist_size * 4)
-
-        # histogram = cp.zeros((480, 480, hist_size), dtype=cp.float32)
 
         if max_vram_gb is None and free_memory > needed_memory:
             histogram = cp.zeros((grid.shape[0], grid.shape[1], hist_size), dtype=cp.float32)
@@ -187,7 +194,7 @@ class SensitivityField:
             i = 0
             while 1:
                 new_shape = (grid.shape[0] // (1 + i) + 1,  grid.shape[1] // (1 + i) + 1, hist_size)
-                needed_memory = np.prod(new_shape) * 4
+                needed_memory = new_shape[0] * new_shape[1] * new_shape[2] * 4
                 if needed_memory < max_vram:
                     break
                 i += 1

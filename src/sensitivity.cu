@@ -182,5 +182,5 @@ void calc_sensitivity(
 
 
 NB_MODULE(sensitivity_cuda, m) {
-    m.def("calc_sensitivity", &calc_sensitivity<float>, "Create Sensitivity Field");
+    m.def("calc_sensitivity", &calc_sensitivity<float>, "Calculate Sensitivity Field");
 }
