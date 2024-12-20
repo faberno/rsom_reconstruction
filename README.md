@@ -7,10 +7,10 @@ README Template from: https://github.com/othneildrew/Best-README-Template
 <!-- PROJECT LOGO -->
 <br />
 <div align="center">
-  <a>
+<!--   <a>
     <img src="https://github.com/faberno/vessel_voxelizer/blob/main/files/logo.svg" alt="Logo" width="1000" height="100">
   </a>
-
+ -->
   <h3 align="center">RSOM Reconstruction</h3>
 
   <p align="center">
@@ -64,31 +64,14 @@ README Template from: https://github.com/othneildrew/Best-README-Template
 - a CUDA-capable GPU
 
 ### Installation
-1) clone the repository and update the nanobind submodule
+1) clone the repository
 ```bash
 git clone https://github.com/faberno/rsom_reconstruction.git
-git submodule update --init --recursive
 ```
-2) install cupy based on your CUDA version
-```bash
-# for CUDA 11.x
-pip install cupy-cuda11x
-
-# for CUDA 12.x
-pip install cupy-cuda12x
-```
-3) compile and install the library
+2) compile and install the library
 ```bash
 pip install .
 ```
-
-<!-- USAGE EXAMPLES -->
-## Documentation
-
-### API
-
-### Example
-For a full example, take a look at the following [notebook](example/example.ipynb).
 
 <!-- LICENSE -->
 ## License
