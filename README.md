@@ -72,6 +72,13 @@ git clone https://github.com/faberno/rsom_reconstruction.git
 ```bash
 pip install .
 ```
+3) make sure you have one of the following gpu-array libraries installed:
+- cupy (https://docs.cupy.dev/en/stable/install.html)
+
+Soon supported: 
+
+- pytorch (https://pytorch.org/get-started/locally/)
+- jax (https://jax.readthedocs.io/en/latest/installation.html)
 
 <!-- LICENSE -->
 ## License

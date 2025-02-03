@@ -1,33 +1,37 @@
-from math import sqrt, copysign, floor
-from time import time
 from typing import Optional, Union
 
 import cupy as cp
 import hdf5storage as h5
-import matplotlib.pyplot as plt
 import numpy as np
 
-from .preprocessing import line_filter, bandpass_filter, preprocess_signal
+from .preprocessing import preprocess_signal
 from .saft_cuda import run_saft
 from .sensitivity import SensitivityField
 from .utils import ndarray
 
 
-def saft_munich_adapter(signal_path: str,
-                        sensitivity_field: SensitivityField,
-                        reconstruction_grid_spacing_mm: tuple = (12e-3, 12e-3, 3e-3),
-                        reconstruction_grid_bounds_mm: Optional[tuple] = None,
-                        data_sign=-1,
-                        sound_speed_mm_per_s: float = 1525e3,
-                        td_focal_length_mm=2.97,
-                        recon_mode=4,
-                        direct_term_weight=10.0,
-                        delay_line_time_s=199 / 3.05e8,
-                        preprocess=True,
-                        preprocess_bandpass_freq_hz=(15e6, 42e6, 120e6),
-                        return_reconstruction_grid=False,
-                        verbose=True):
-    """ Wrapper around the SAFT algorithm for the .mat file format. """
+def saft_matfile_adapter(signal_path: str,
+                         sensitivity_field: SensitivityField,
+                         reconstruction_grid_spacing_mm: tuple = (12e-3, 12e-3, 3e-3),
+                         reconstruction_grid_bounds_mm: Optional[tuple] = None,
+                         data_sign=-1,
+                         sound_speed_mm_per_s: float = 1525e3,
+                         td_focal_length_mm=2.97,
+                         recon_mode=4,
+                         direct_term_weight=10.0,
+                         delay_line_time_s=199 / 3.05e8,
+                         preprocess=True,
+                         preprocess_bandpass_freq_hz=(15e6, 42e6, 120e6),
+                         return_reconstruction_grid=False,
+                         verbose=True):
+    """ Wrapper around the SAFT algorithm for the .mat file format.
+
+    The data should be stored in the following fields:
+        S: Recorded A-lines (n_sensor_positions x n_samples)
+        positionXY: xy-positions of the sensor (n_sensor_positions x 2)
+        Fs: Sampling frequency of the transducer [Hz]
+        trigDelay: Number of samples waited between laser trigger and recording
+    """
     raw_signal_dict = h5.loadmat(signal_path)
 
     assert data_sign in [-1, 1], "data_sign must be either -1 or 1"
