@@ -41,14 +41,18 @@ README Template from: https://github.com/othneildrew/Best-README-Template
   - soon supported: pytorch, jax
   
 ### Installation
-1) clone the repository
+From pypi:
+```bash
+pip install rsom_reconstruction
+```
+
+From source:
 ```bash
 git clone https://github.com/faberno/rsom_reconstruction.git
-```
-2) compile and install the library
-```bash
+cd rsom_reconstruction
 pip install .
 ```
+
 
 ## Documentation
 TODO
