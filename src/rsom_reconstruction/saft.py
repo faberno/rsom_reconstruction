@@ -1,3 +1,4 @@
+from pathlib import Path
 from typing import Optional, Union
 
 import cupy as cp
@@ -10,7 +11,7 @@ from .sensitivity import SensitivityField
 from .utils import ndarray
 
 
-def saft_matfile_adapter(signal_path: str,
+def saft_matfile_adapter(signal_path: Union[str, Path],
                          sensitivity_field: SensitivityField,
                          reconstruction_grid_spacing_mm: tuple = (12e-3, 12e-3, 3e-3),
                          reconstruction_grid_bounds_mm: Optional[tuple] = None,
@@ -32,6 +33,9 @@ def saft_matfile_adapter(signal_path: str,
         Fs: Sampling frequency of the transducer [Hz]
         trigDelay: Number of samples waited between laser trigger and recording
     """
+    if isinstance(signal_path, Path):
+        signal_path = str(signal_path)
+
     raw_signal_dict = h5.loadmat(signal_path)
 
     assert data_sign in [-1, 1], "data_sign must be either -1 or 1"

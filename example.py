@@ -1,4 +1,4 @@
-from rsom_reconstruction import SensitivityField, saft_matfile_adapter, recon2rgb
+from rsom_reconstruction import SensitivityField, saft_matfile_adapter, recon2rgb, write_to_matfile
 import matplotlib.pyplot as plt
 from time import time
 
@@ -13,6 +13,8 @@ def main():
     recon = saft_matfile_adapter(data_path, sensitivity, verbose=True)
 
     print('Elapsed time:', time() - start)
+
+    write_to_matfile(data_path, recon) # automatically adds '_LF' and '_HF' to the path
 
     recon = recon2rgb(recon).get()
     plt.imshow(recon.max(1))
