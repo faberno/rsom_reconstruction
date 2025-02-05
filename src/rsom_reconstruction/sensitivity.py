@@ -6,21 +6,20 @@ from .sensitivity_cuda import calc_sensitivity
 
 import numpy as np
 import cupy as cp
-from tqdm import tqdm
 
 
 class SensitivityField:
     def __init__(self,
                  sound_speed_mm_per_s: float = 1525e3,
                  bandpass_freq_hz: tuple = (10e6, 90e6),
-                 td_focal_length_mm=2.97,
-                 td_diameter_mm=3.0,
+                 td_focal_length_mm: float=2.97,
+                 td_diameter_mm: float=3.0,
                  td_focal_zone_factor: float = 1.02,
-                 sampling_freq_hz=1e9,
-                 n_sensor_points=4000,
-                 precomputed_field=None,
-                 precomputed_x=None,
-                 precomputed_z=None):
+                 sampling_freq_hz: float=1e9,
+                 n_sensor_points: int=4000,
+                 precomputed_field: Optional[np.ndarray] = None,
+                 precomputed_x: Optional[np.ndarray] = None,
+                 precomputed_z: Optional[np.ndarray] = None):
         """
         Represents the sensitivity field of a focal transducer.
 
@@ -106,7 +105,7 @@ class SensitivityField:
             )
 
     @staticmethod
-    def from_precomputed(field, x, z):
+    def from_precomputed(field: np.ndarray, x: np.ndarray, z: np.ndarray):
         sensitivity_field = SensitivityField(
             precomputed_field=field,
             precomputed_x=x,
@@ -117,7 +116,7 @@ class SensitivityField:
     def simulate(self,
                  z: np.ndarray,
                  x: Optional[np.ndarray] = None, x_spacing: float = None,
-                 max_vram_gb: Optional[Union[int, float]] = None, verbose=True):
+                 max_vram_gb: Optional[Union[int, float]] = None, verbose: bool = True):
         """
         Simulates the sensitivity field of a focal transducer.
 
@@ -133,6 +132,11 @@ class SensitivityField:
             the hyperbola is used as furthest point in x-direction
         x_spacing : float
             Spacing of the x-coordinates if x is not provided
+        max_vram_gb : int, float
+            Maximum amount of VRAM in GB to use for the calculation.
+            If None, all available VRAM can be used.
+        verbose : bool
+            Print additional information.
         """
         if self.is_precomputed:
             raise ValueError("Sensitivity field is precomputed and cannot be simulated")
@@ -178,7 +182,7 @@ class SensitivityField:
 
         # calculating a histogram does not benefit much from many threads, because the threads can not write to the
         # same bin at the same time. So instead we deploy one thread per voxel histogram. This requires a lot of memory,
-        # so we can only do it in the global memory of the GPU. If we don't have enough memory for the whole histogra,
+        # so we can only do it in the global memory of the GPU. If we don't have enough memory for the whole histogram,
         # we have to split it up into patches which each require a kernel call
         free_memory = cp.cuda.Device(0).mem_info[0]
         needed_memory = (grid.shape[0] * grid.shape[1] * hist_size * 4)

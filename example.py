@@ -8,6 +8,7 @@ def main():
     data_path = '...'
 
     start = time()
+
     sensitivity = SensitivityField()
     recon = saft_matfile_adapter(data_path, sensitivity, verbose=True)
 

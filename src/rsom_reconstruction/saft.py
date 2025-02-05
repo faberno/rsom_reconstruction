@@ -69,12 +69,12 @@ def saft(signal: ndarray,
          trigger_delay: float = 2080.0,
          delay_line_time_s: float = 199 / 3.05e8,
          sound_speed_mm_per_s: float = 1525e3,
-         recon_mode=4,
-         direct_term_weight=10.0,
-         preprocess=True,
-         preprocess_bandpass_freq_hz=(15e6, 42e6, 120e6),
-         return_reconstruction_grid=False,
-         verbose=True):
+         recon_mode: int = 4,
+         direct_term_weight: float = 10.0,
+         preprocess: bool = True,
+         preprocess_bandpass_freq_hz: tuple = (15e6, 42e6, 120e6),
+         return_reconstruction_grid: bool = False,
+         verbose: bool = True):
     """
     SAFT (Synthetic Aperture Focusing Technique) / Delay-and-Sum algorithm with sensitivity field weighting.
 
@@ -95,7 +95,7 @@ def saft(signal: ndarray,
         Sensitivity field object for the used transducer
     reconstruction_grid_spacing_mm: Tuple
         Spacing of the reconstruction grid in x, y and z direction [mm]
-    reconstruction_grid_bounds_mm: Tuple  todo
+    reconstruction_grid_bounds_mm: Tuple
         Boundaries of the reconstruction grid in x, y and z direction [mm]
     sampling_freq_hz : float
         Sampling frequency of the transducer [Hz]
@@ -214,5 +214,3 @@ def saft(signal: ndarray,
     if return_reconstruction_grid:
         return output, reconstruction_grid
     return output
-
-    # return output
