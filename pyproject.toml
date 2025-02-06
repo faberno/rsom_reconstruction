@@ -4,7 +4,7 @@ build-backend = "scikit_build_core.build"
 
 [project]
 name = "rsom_reconstruction"
-version = "0.0.2"
+version = "0.0.3"
 description = "GPU accelerated 3D reconstruction of raster-scan optoacoustic data."
 readme = "README.md"
 requires-python = ">=3.8"
