@@ -164,7 +164,7 @@ def preprocess_signal(signal, **kwargs):
     signal_linefiltered = line_filter(signal, **line_filter_kwargs)
 
     # apply bandpass filter
-    bandpass_filter_parameter = ['order', 'f_bandpass', 'fs', 'apodization', 'apodization_fraction', 'apodization_slope']
+    bandpass_filter_parameter = ['order', 'bandpass_freq_hz', 'sampling_freq_hz', 'apply_apodization', 'apodization_fraction', 'apodization_slope']
     bandpass_filter_kwargs = {k: v for k, v in kwargs.items() if k in bandpass_filter_parameter}
     signal_bandpassfiltered = bandpass_filter(signal_linefiltered, **bandpass_filter_kwargs)
 

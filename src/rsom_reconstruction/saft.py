@@ -150,7 +150,9 @@ def saft(signal: ndarray,
 
     # common RSOM preprocessing (line + bandpass filter)
     if preprocess:
-        signal = xp.ascontiguousarray(preprocess_signal(signal, bandpass_freq_hz=preprocess_bandpass_freq_hz))
+        signal = xp.ascontiguousarray(
+            preprocess_signal(signal, bandpass_freq_hz=preprocess_bandpass_freq_hz, sampling_freq_hz=sampling_freq_hz),
+        )
 
     # calculate time points / space positions of samples
     dt_mm = sound_speed_mm_per_s / sampling_freq_hz  # distance between signal samples [mm]
