@@ -179,7 +179,7 @@ def saft(signal: ndarray,
         int)
     grid_size = tuple(grid_size.tolist())
     reconstruction_grid = [
-        (reconstruction_grid_bounds_mm[i, 0] + xp.arange(grid_size[i]) * spacing[i]).astype(signal.dtype) for i in
+        (reconstruction_grid_bounds_mm[i, 0] + spacing[i].item() / 2 + xp.arange(grid_size[i]) * spacing[i]).astype(signal.dtype) for i in
         range(3)
     ]
 
